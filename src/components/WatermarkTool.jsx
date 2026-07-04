@@ -28,12 +28,16 @@ export default function WatermarkTool() {
     setDetectMessage(null);
     setError(null);
     try {
-      const found = await detectWatermarks(videoElRef.current, videoSize);
+      const { regions: found, degraded } = await detectWatermarks(videoElRef.current, videoSize);
       if (found.length === 0) {
-        setDetectMessage("La IA no encontró marcas de agua en este fotograma. Prueba en otro momento del vídeo o marca la zona manualmente.");
+        setDetectMessage(
+          degraded
+            ? "El modelo principal de IA está al límite de uso y la detección se hizo con un modelo reducido, sin resultados. Marca la zona manualmente o inténtalo más tarde."
+            : "La IA no encontró marcas de agua en este fotograma. Prueba en otro momento del vídeo o marca la zona manualmente."
+        );
       } else {
         setRegions((prev) => [...prev, ...found]);
-        setDetectMessage(`✨ ${found.length} marca${found.length > 1 ? "s" : ""} de agua detectada${found.length > 1 ? "s" : ""}. Ajusta o elimina las zonas si es necesario.`);
+        setDetectMessage(`✨ ${found.length} marca${found.length > 1 ? "s" : ""} de agua detectada${found.length > 1 ? "s" : ""}. Verifica que las zonas cubran toda la marca: si falta una parte, dibuja un rectángulo adicional encima.`);
       }
     } catch (err) {
       if (err instanceof DetectionUnavailableError) {

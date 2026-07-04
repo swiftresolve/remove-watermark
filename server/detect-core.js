@@ -3,10 +3,18 @@
 // de desarrollo de Vite (vite.config.js).
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
+// Si el modelo principal está saturado (503) o limitado (429), se intenta
+// con estos modelos alternativos antes de rendirse.
+const FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-2.5-flash-lite"];
 
+// Campos con nombre en lugar de box_2d posicional: el orden de las
+// coordenadas posicionales es ambiguo y el modelo a veces lo invierte.
 const PROMPT = `Detecta todas las marcas de agua en esta imagen (fotograma de un vídeo): logotipos, textos superpuestos, sellos de fecha/hora, iconos de plataformas o cualquier superposición de branding.
-Responde ÚNICAMENTE con un array JSON. Cada elemento: {"box_2d": [ymin, xmin, ymax, xmax], "label": "descripción corta"} con coordenadas normalizadas de 0 a 1000.
-Si no hay marcas de agua, responde [].`;
+Para cada marca de agua devuelve su caja delimitadora con coordenadas normalizadas de 0 a 1000, donde xmin/xmax son horizontales (0=izquierda, 1000=derecha) e ymin/ymax son verticales (0=arriba, 1000=abajo).
+IMPORTANTE: la caja debe cubrir la marca de agua COMPLETA, desde el primer carácter o borde del logo hasta el último, incluyendo símbolos como ©. Es preferible una caja algo más grande a una que corte parte de la marca.
+Si no hay marcas de agua, devuelve un array vacío.`;
+
+const PROMPT_SUFFIX = `\nFormato de respuesta (solo JSON, sin markdown): [{"xmin":0,"ymin":0,"xmax":0,"ymax":0,"label":"..."}]`;
 
 /**
  * Detecta marcas de agua en un fotograma usando la API de Gemini.
@@ -16,9 +24,8 @@ Si no hay marcas de agua, responde [].`;
  * @returns {Promise<{x:number,y:number,w:number,h:number,label:string}[]>} regiones normalizadas 0..1
  */
 export async function detectWatermarkRegions(imageBase64, apiKey, model = DEFAULT_MODEL) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
+  const request = (m) =>
+    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -29,7 +36,7 @@ export async function detectWatermarkRegions(imageBase64, apiKey, model = DEFAUL
           {
             parts: [
               { inline_data: { mime_type: "image/jpeg", data: imageBase64 } },
-              { text: PROMPT },
+              { text: PROMPT + PROMPT_SUFFIX },
             ],
           },
         ],
@@ -38,8 +45,20 @@ export async function detectWatermarkRegions(imageBase64, apiKey, model = DEFAUL
           temperature: 0,
         },
       }),
-    }
-  );
+    });
+
+  // Reintento con espera y cadena de modelos de respaldo ante saturación (503/429)
+  const models = [model, ...FALLBACK_MODELS.filter((m) => m !== model)];
+  let response;
+  let usedModel = models[0];
+  for (const m of models) {
+    usedModel = m;
+    response = await request(m);
+    if (response.ok || ![429, 500, 503].includes(response.status)) break;
+    await new Promise((r) => setTimeout(r, 1200));
+    response = await request(m);
+    if (response.ok || ![429, 500, 503].includes(response.status)) break;
+  }
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -56,10 +75,28 @@ export async function detectWatermarkRegions(imageBase64, apiKey, model = DEFAUL
   }
   if (!Array.isArray(boxes)) boxes = [];
 
-  return boxes
-    .filter((b) => Array.isArray(b?.box_2d) && b.box_2d.length === 4)
+  const regions = boxes
+    .filter((b) => [b?.xmin, b?.ymin, b?.xmax, b?.ymax].every((n) => Number.isFinite(Number(n))))
     .map((b) => {
-      const [ymin, xmin, ymax, xmax] = b.box_2d.map((n) => clamp01(Number(n) / 1000));
+      // Margen extra proporcional: los modelos suelen devolver cajas más
+      // pequeñas que la marca real y delogo necesita cubrirla completa.
+      // Cubrir píxeles limpios de más apenas se nota; cubrir de menos deja
+      // la marca asomando.
+      const rawXmin = Number(b.xmin) / 1000;
+      const rawYmin = Number(b.ymin) / 1000;
+      const rawXmax = Number(b.xmax) / 1000;
+      const rawYmax = Number(b.ymax) / 1000;
+      const w = Math.abs(rawXmax - rawXmin);
+      const h = Math.abs(rawYmax - rawYmin);
+      // Las marcas de texto (cajas anchas y delgadas) necesitan más margen
+      // horizontal: los modelos suelen recortar el inicio del texto (p. ej. "©").
+      const wideText = h > 0 && w / h > 2.5;
+      const padX = Math.min(wideText ? 0.07 : 0.04, Math.max(0.012, w * (wideText ? 0.2 : 0.12)));
+      const padY = Math.min(0.04, Math.max(0.012, h * 0.12));
+      const xmin = clamp01(rawXmin - padX);
+      const ymin = clamp01(rawYmin - padY);
+      const xmax = clamp01(rawXmax + padX);
+      const ymax = clamp01(rawYmax + padY);
       return {
         x: Math.min(xmin, xmax),
         y: Math.min(ymin, ymax),
@@ -69,6 +106,8 @@ export async function detectWatermarkRegions(imageBase64, apiKey, model = DEFAUL
       };
     })
     .filter((r) => r.w > 0.005 && r.h > 0.005);
+
+  return { regions, model: usedModel };
 }
 
 /**
@@ -92,11 +131,23 @@ export async function handleDetectRequest(body, apiKey) {
     return { status: 413, payload: { error: "El fotograma es demasiado grande.", code: "TOO_LARGE" } };
   }
   try {
-    const regions = await detectWatermarkRegions(image, apiKey, process.env.GEMINI_MODEL || undefined);
-    return { status: 200, payload: { regions } };
+    const primary = process.env.GEMINI_MODEL || undefined;
+    const { regions, model } = await detectWatermarkRegions(image, apiKey, primary);
+    // degraded: el modelo principal estaba saturado o sin cuota y respondió un respaldo
+    const degraded = model !== (primary || "gemini-2.5-flash");
+    return { status: 200, payload: { regions, model, degraded } };
   } catch (err) {
     console.error("detect-watermark:", err);
-    return { status: 502, payload: { error: "No se pudo completar la detección con IA.", code: "UPSTREAM" } };
+    const busy = /429|503/.test(err?.message || "");
+    return {
+      status: 502,
+      payload: {
+        error: busy
+          ? "El servicio de IA está saturado en este momento. Espera unos segundos y vuelve a intentarlo."
+          : "No se pudo completar la detección con IA. Puedes marcar la zona manualmente.",
+        code: "UPSTREAM",
+      },
+    };
   }
 }
 

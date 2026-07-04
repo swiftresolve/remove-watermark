@@ -48,10 +48,11 @@ export async function detectWatermarks(videoEl, videoSize) {
   }
 
   // El backend devuelve regiones normalizadas 0..1 → convertir a píxeles del vídeo
-  return (data.regions || []).map((r) => ({
+  const regions = (data.regions || []).map((r) => ({
     x: Math.round(r.x * videoSize.w),
     y: Math.round(r.y * videoSize.h),
     w: Math.round(r.w * videoSize.w),
     h: Math.round(r.h * videoSize.h),
   }));
+  return { regions, degraded: Boolean(data.degraded) };
 }
