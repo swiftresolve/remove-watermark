@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import RegionSelector from "./RegionSelector";
 import { removeWatermark } from "../lib/processor";
+import { detectWatermarks, DetectionUnavailableError } from "../lib/detector";
 import { ACCENT, ACCENT2, BG_CARD, BG_CARD2, TEXT_MAIN, TEXT_MUTED, SUCCESS, DANGER, BORDER } from "../theme";
 
 const MAX_FILE_SIZE = Number(import.meta.env.VITE_MAX_FILE_SIZE) || 524288000; // 500 MB
@@ -16,7 +17,34 @@ export default function WatermarkTool() {
   const [resultUrl, setResultUrl] = useState(null);
   const [error, setError] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [detectMessage, setDetectMessage] = useState(null);
   const fileInputRef = useRef(null);
+  const videoElRef = useRef(null);
+
+  const handleDetect = async () => {
+    if (!videoElRef.current || !videoSize || detecting) return;
+    setDetecting(true);
+    setDetectMessage(null);
+    setError(null);
+    try {
+      const found = await detectWatermarks(videoElRef.current, videoSize);
+      if (found.length === 0) {
+        setDetectMessage("La IA no encontró marcas de agua en este fotograma. Prueba en otro momento del vídeo o marca la zona manualmente.");
+      } else {
+        setRegions((prev) => [...prev, ...found]);
+        setDetectMessage(`✨ ${found.length} marca${found.length > 1 ? "s" : ""} de agua detectada${found.length > 1 ? "s" : ""}. Ajusta o elimina las zonas si es necesario.`);
+      }
+    } catch (err) {
+      if (err instanceof DetectionUnavailableError) {
+        setDetectMessage(err.message);
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const acceptFile = (selected) => {
     setError(null);
@@ -35,6 +63,7 @@ export default function WatermarkTool() {
     setRegions([]);
     setResultUrl(null);
     setProgress(0);
+    setDetectMessage(null);
   };
 
   const handleDrop = (e) => {
@@ -76,6 +105,7 @@ export default function WatermarkTool() {
     setResultUrl(null);
     setProgress(0);
     setError(null);
+    setDetectMessage(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -141,7 +171,36 @@ export default function WatermarkTool() {
             </button>
           </div>
 
-          <RegionSelector videoUrl={videoUrl} regions={regions} onChange={setRegions} onVideoSize={setVideoSize} />
+          <RegionSelector videoUrl={videoUrl} regions={regions} onChange={setRegions} onVideoSize={setVideoSize} videoElRef={videoElRef} />
+
+          <button
+            onClick={handleDetect}
+            disabled={detecting || !videoSize}
+            style={{
+              background: "transparent",
+              color: detecting ? TEXT_MUTED : ACCENT2,
+              border: `1px dashed ${detecting ? BORDER : ACCENT2}`,
+              padding: "12px 24px",
+              borderRadius: 10,
+              fontWeight: 700,
+              fontSize: 14,
+              cursor: detecting ? "wait" : "pointer",
+              width: "100%",
+              marginTop: 16,
+              transition: "all 0.2s",
+            }}
+          >
+            {detecting ? "🔍 Analizando fotograma con IA..." : "✨ Detectar marcas automáticamente con IA"}
+          </button>
+          <p style={{ color: TEXT_MUTED, fontSize: 12, margin: "8px 0 0", textAlign: "center" }}>
+            Solo se envía el fotograma actual para analizarlo. El vídeo completo nunca sale de tu dispositivo.
+          </p>
+
+          {detectMessage && (
+            <div style={{ background: `${ACCENT}18`, border: `1px solid ${ACCENT}55`, borderRadius: 10, padding: "12px 16px", marginTop: 12, color: ACCENT2, fontSize: 14, textAlign: "center" }}>
+              {detectMessage}
+            </div>
+          )}
 
           {error && <ErrorBox message={error} />}
 

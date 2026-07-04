@@ -4,9 +4,9 @@ import { ACCENT, ACCENT2, BG_DARK, BG_CARD, BG_CARD2, TEXT_MAIN, TEXT_MUTED, BOR
 
 const features = [
   {
-    icon: "🎯",
-    title: "Selección precisa",
-    desc: "Marca exactamente la zona de la marca de agua sobre el vídeo. Puedes seleccionar varias zonas a la vez.",
+    icon: "✨",
+    title: "Detección con IA",
+    desc: "Detecta marcas de agua automáticamente con un clic, o marca la zona exacta tú mismo. Puedes seleccionar varias zonas a la vez.",
   },
   {
     icon: "🎬",
@@ -38,7 +38,7 @@ const features = [
 const faqs = [
   {
     q: "¿Qué tipos de marcas de agua puede eliminar?",
-    a: "Puede eliminar logotipos, textos superpuestos, sellos de fecha/hora y cualquier superposición estática: solo marca la zona donde aparece. Para marcas de agua que se mueven por el vídeo, marca una zona que cubra todo su recorrido.",
+    a: "Puede eliminar logotipos, textos superpuestos, sellos de fecha/hora y cualquier superposición estática. Usa la detección automática con IA o marca la zona manualmente. Para marcas de agua que se mueven por el vídeo, marca una zona que cubra todo su recorrido.",
   },
   {
     q: "¿Se verá afectada la calidad del vídeo?",
@@ -46,7 +46,7 @@ const faqs = [
   },
   {
     q: "¿Es seguro subir mis vídeos?",
-    a: "No subes nada: el procesamiento ocurre completamente en tu navegador gracias a WebAssembly. Tu vídeo nunca sale de tu dispositivo, por lo que es la opción más privada posible.",
+    a: "No subes nada: el procesamiento ocurre completamente en tu navegador gracias a WebAssembly y tu vídeo nunca sale de tu dispositivo. Solo si usas la detección automática con IA se envía un único fotograma (una imagen) para analizarlo, nunca el vídeo.",
   },
   {
     q: "¿Qué formatos de vídeo son compatibles?",
@@ -64,7 +64,7 @@ const faqs = [
 
 const steps = [
   { num: "01", title: "Sube tu vídeo", desc: "Arrastra y suelta tu vídeo o haz clic para seleccionarlo. No se sube a ningún servidor." },
-  { num: "02", title: "Marca la zona", desc: "Dibuja un rectángulo sobre cada marca de agua directamente en la vista previa del vídeo." },
+  { num: "02", title: "Marca la zona", desc: "Usa la detección automática con IA o dibuja un rectángulo sobre cada marca de agua en la vista previa." },
   { num: "03", title: "Procesa y descarga", desc: "El vídeo se procesa en tu navegador y descargas el resultado limpio en MP4." },
 ];
 

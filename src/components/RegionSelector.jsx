@@ -7,7 +7,7 @@ const MIN_REGION_DISPLAY_PX = 8;
  * Muestra el vídeo y permite dibujar rectángulos sobre las marcas de agua.
  * Las regiones se guardan en píxeles del vídeo original (coordenadas intrínsecas).
  */
-export default function RegionSelector({ videoUrl, regions, onChange, onVideoSize }) {
+export default function RegionSelector({ videoUrl, regions, onChange, onVideoSize, videoElRef }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const [drawing, setDrawing] = useState(null);
@@ -105,7 +105,10 @@ export default function RegionSelector({ videoUrl, regions, onChange, onVideoSiz
         }}
       >
         <video
-          ref={videoRef}
+          ref={(el) => {
+            videoRef.current = el;
+            if (videoElRef) videoElRef.current = el;
+          }}
           src={videoUrl}
           onLoadedMetadata={handleLoadedMetadata}
           muted
