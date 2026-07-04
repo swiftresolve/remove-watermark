@@ -31,6 +31,9 @@ body {
   background: #7c3aed;
 }
 
+.nav-link {
+  display: none;
+}
 @media (min-width: 640px) {
   .nav-link {
     display: inline-block !important;

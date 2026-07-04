@@ -1,0 +1,11 @@
+export const ACCENT = "#7c3aed";
+export const ACCENT2 = "#a855f7";
+export const ACCENT_LIGHT = "#ede9fe";
+export const BG_DARK = "#0f0a1e";
+export const BG_CARD = "#1a1033";
+export const BG_CARD2 = "#221644";
+export const TEXT_MAIN = "#f5f3ff";
+export const TEXT_MUTED = "#a89ec5";
+export const SUCCESS = "#22c55e";
+export const DANGER = "#ef4444";
+export const BORDER = "#2d1f5e";
